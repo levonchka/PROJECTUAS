@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using System.Collections;
+using UnityEngine;
+using UnityEngine.UI;
 
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(Animator))]
@@ -15,10 +17,16 @@ public class HeroController : MonoBehaviour
     [SerializeField] private float jumpForce = 7f;
     [SerializeField] private float gravity = 20f;
 
+    [Header("Health Settings")]
+    [SerializeField] private float maxHealth = 100f;
+    private float currentHealth;
+    public Slider healthBar; // pakai slider di Canvas
+
     private Vector3 moveDir = Vector3.zero;
     private float verticalVelocity = 0f;
     private bool isJumping = false;
     private bool isAttacking = false;
+    private bool isDead = false;
 
     private int comboStep = 0;
     private float comboTimer = 0f;
@@ -29,30 +37,34 @@ public class HeroController : MonoBehaviour
         anim = GetComponent<Animator>();
         controller = GetComponent<CharacterController>();
         anim.applyRootMotion = false;
+
+        currentHealth = maxHealth;
+        if (healthBar)
+        {
+            healthBar.maxValue = maxHealth;
+            healthBar.value = currentHealth;
+        }
     }
 
     void Update()
     {
-        if (anim.GetBool("isDead")) return;
+        if (isDead) return;
 
         HandleMovement();
         HandleJump();
         HandleAttackCombo();
         HandleDefend();
-        HandleHit();
-        HandleVictory();
     }
 
-    // =============================
+    // ========================================
     // MOVEMENT
-    // =============================
+    // ========================================
     void HandleMovement()
     {
         float h = Input.GetAxisRaw("Horizontal");
         float v = Input.GetAxisRaw("Vertical");
         Vector3 input = new Vector3(h, 0, v).normalized;
 
-        // masih bisa jalan walau attack tapi pelan
         float currentSpeed = isAttacking ? moveSpeed * 0.6f : moveSpeed;
 
         if (input.magnitude >= 0.1f)
@@ -84,9 +96,9 @@ public class HeroController : MonoBehaviour
         controller.Move(velocity * Time.deltaTime);
     }
 
-    // =============================
+    // ========================================
     // JUMP
-    // =============================
+    // ========================================
     void HandleJump()
     {
         bool grounded = controller.isGrounded;
@@ -115,17 +127,16 @@ public class HeroController : MonoBehaviour
         }
     }
 
-    // =============================
-    // ATTACK (Attack01, Attack04, dan Aerial Attack)
-    // =============================
+    // ========================================
+    // ATTACK COMBO
+    // ========================================
     void HandleAttackCombo()
     {
-        // izinkan attack di darat atau di udara
         if (Input.GetMouseButtonDown(0))
         {
             AnimatorStateInfo state = anim.GetCurrentAnimatorStateInfo(0);
 
-            // --- Attack di udara ---
+            // Attack di udara
             if (isJumping && !isAttacking)
             {
                 isAttacking = true;
@@ -135,7 +146,7 @@ public class HeroController : MonoBehaviour
                 return;
             }
 
-            // --- Attack di darat (combo) ---
+            // Attack di darat
             if (!isAttacking)
             {
                 isAttacking = true;
@@ -154,7 +165,7 @@ public class HeroController : MonoBehaviour
             }
         }
 
-        // Reset combo kalau timeout
+        // Reset combo
         if (isAttacking && (Time.time - comboTimer) > comboMaxDelay)
         {
             ResetAttack();
@@ -179,9 +190,9 @@ public class HeroController : MonoBehaviour
             anim.CrossFade("Idle_Normal_SwordAndShield", 0.1f);
     }
 
-    // =============================
+    // ========================================
     // DEFEND
-    // =============================
+    // ========================================
     void HandleDefend()
     {
         if (Input.GetMouseButtonDown(1))
@@ -195,46 +206,36 @@ public class HeroController : MonoBehaviour
         }
     }
 
-    // =============================
-    // HIT
-    // =============================
-    void HandleHit()
+    // ========================================
+    // DAMAGE & HIT
+    // ========================================
+    public void TakeDamage(float damage)
     {
-        if (Input.GetKeyDown(KeyCode.H))
+        if (isDead) return;
+
+        currentHealth -= damage;
+        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+        if (healthBar) healthBar.value = currentHealth;
+
+        anim.SetTrigger("isHit");
+        Debug.Log($"🔥 Hero kena hit! Sisa HP: {currentHealth}");
+
+        if (currentHealth <= 0)
         {
-            anim.SetTrigger("isHit");
+            Die();
         }
     }
 
-    // =============================
-    // VICTORY
-    // =============================
-    void HandleVictory()
+    public float GetCurrentHealth()
     {
-        if (Input.GetKeyDown(KeyCode.V))
-        {
-            anim.SetBool("isVictory", true);
-            anim.SetBool("isWalk", false);
-        }
-        if (Input.GetKeyUp(KeyCode.V))
-        {
-            anim.SetBool("isVictory", false);
-        }
+        return currentHealth;
     }
 
-    // =============================
-    // DIE
-    // =============================
-    public void Die()
+    void Die()
     {
+        isDead = true;
         anim.SetBool("isDead", true);
-        anim.SetBool("isWalk", false);
-        anim.SetBool("isDefend", false);
-        anim.SetBool("isVictory", false);
-        anim.SetBool("isAttack", false);
-        anim.SetInteger("attackIndex", 0);
-        comboStep = 0;
-        isAttacking = false;
         anim.CrossFade("Die01_SwordAndShield", 0.1f);
+        Debug.Log("☠️ Hero mati.");
     }
 }
