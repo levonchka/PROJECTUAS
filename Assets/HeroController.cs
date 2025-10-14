@@ -1,21 +1,34 @@
-using UnityEngine;
+﻿using UnityEngine;
 
+[RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(Animator))]
 public class HeroController : MonoBehaviour
 {
     private Animator anim;
+    private CharacterController controller;
+
+    [Header("Movement Settings")]
+    [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] private float rotationSpeed = 10f;
+
+    [Header("Jump Settings")]
+    [SerializeField] private float jumpForce = 7f;
+    [SerializeField] private float gravity = 20f;
+
+    private Vector3 moveDir = Vector3.zero;
+    private float verticalVelocity = 0f;
     private bool isJumping = false;
+    private bool isAttacking = false;
+
     private int comboStep = 0;
     private float comboTimer = 0f;
     private readonly float comboMaxDelay = 1.0f;
 
-    [SerializeField] private float moveSpeed = 5f;
-    [SerializeField] private bool useRootMotion = false;
-
     void Start()
     {
         anim = GetComponent<Animator>();
-        anim.applyRootMotion = useRootMotion;
+        controller = GetComponent<CharacterController>();
+        anim.applyRootMotion = false;
     }
 
     void Update()
@@ -26,107 +39,149 @@ public class HeroController : MonoBehaviour
         HandleJump();
         HandleAttackCombo();
         HandleDefend();
+        HandleHit();
         HandleVictory();
-        HandleHitInput();
-        AutoResetJump();
     }
 
-    // -------------------------------------
+    // =============================
     // MOVEMENT
-    // -------------------------------------
+    // =============================
     void HandleMovement()
     {
-        float h = Input.GetAxis("Horizontal");
-        float v = Input.GetAxis("Vertical");
-        bool isMoving = Mathf.Abs(h) > 0.1f || Mathf.Abs(v) > 0.1f;
-        anim.SetBool("isWalk", isMoving);
+        float h = Input.GetAxisRaw("Horizontal");
+        float v = Input.GetAxisRaw("Vertical");
+        Vector3 input = new Vector3(h, 0, v).normalized;
 
-        if (isMoving && !useRootMotion)
+        // masih bisa jalan walau attack tapi pelan
+        float currentSpeed = isAttacking ? moveSpeed * 0.6f : moveSpeed;
+
+        if (input.magnitude >= 0.1f)
         {
-            Vector3 dir = new Vector3(h, 0, v);
-            dir = Camera.main.transform.TransformDirection(dir);
-            dir.y = 0;
+            Vector3 camForward = Camera.main.transform.forward;
+            Vector3 camRight = Camera.main.transform.right;
+            camForward.y = 0;
+            camRight.y = 0;
+            camForward.Normalize();
+            camRight.Normalize();
 
-            if (dir.sqrMagnitude > 0.01f)
-            {
-                Quaternion targetRot = Quaternion.LookRotation(dir);
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * 10f);
-                transform.position += dir.normalized * moveSpeed * Time.deltaTime;
-            }
+            Vector3 move = (camForward * v + camRight * h).normalized;
+            moveDir = move;
+
+            Quaternion targetRot = Quaternion.LookRotation(moveDir);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotationSpeed * Time.deltaTime);
+            transform.eulerAngles = new Vector3(0, transform.eulerAngles.y, 0);
+
+            anim.SetBool("isWalk", true);
         }
-    }
-
-    // -------------------------------------
-    // JUMP
-    // -------------------------------------
-    void HandleJump()
-    {
-        if (Input.GetKeyDown(KeyCode.Space) && !isJumping)
+        else
         {
-            isJumping = true;
-            comboStep = 0;
-            anim.SetBool("isAttack", false);
-            anim.SetBool("isJump", true);
+            moveDir = Vector3.zero;
             anim.SetBool("isWalk", false);
         }
+
+        Vector3 velocity = moveDir * currentSpeed;
+        velocity.y = verticalVelocity;
+        controller.Move(velocity * Time.deltaTime);
     }
 
-    void AutoResetJump()
+    // =============================
+    // JUMP
+    // =============================
+    void HandleJump()
     {
-        if (!isJumping) return;
+        bool grounded = controller.isGrounded;
 
-        AnimatorStateInfo state = anim.GetCurrentAnimatorStateInfo(0);
-        bool isInJump = state.IsName("JumpStart_SwordAndShield") || state.IsName("JumpSpin_SwordAndShield");
-
-        if (isInJump && state.normalizedTime >= 0.95f)
+        if (grounded)
         {
-            isJumping = false;
-            anim.SetBool("isJump", false);
+            if (isJumping)
+            {
+                isJumping = false;
+                if (!isAttacking)
+                    anim.CrossFade("Idle_Normal_SwordAndShield", 0.1f);
+            }
+
+            verticalVelocity = -2f;
+
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                verticalVelocity = jumpForce;
+                isJumping = true;
+                anim.CrossFade("JumpFull_Spin_RM_SwordAndShield", 0.05f);
+            }
+        }
+        else
+        {
+            verticalVelocity -= gravity * Time.deltaTime;
         }
     }
 
-    // -------------------------------------
-    // ATTACK COMBO
-    // -------------------------------------
+    // =============================
+    // ATTACK (Attack01, Attack04, dan Aerial Attack)
+    // =============================
     void HandleAttackCombo()
     {
+        // izinkan attack di darat atau di udara
         if (Input.GetMouseButtonDown(0))
         {
-            if (!anim.GetBool("isAttack"))
+            AnimatorStateInfo state = anim.GetCurrentAnimatorStateInfo(0);
+
+            // --- Attack di udara ---
+            if (isJumping && !isAttacking)
             {
+                isAttacking = true;
                 anim.SetBool("isAttack", true);
-                comboStep = 1;
-                anim.SetInteger("attackIndex", comboStep);
+                anim.CrossFade("Attack_Air_SwordAndShield", 0.05f);
                 comboTimer = Time.time;
+                return;
             }
-            else if (comboStep < 4 && (Time.time - comboTimer) <= comboMaxDelay)
+
+            // --- Attack di darat (combo) ---
+            if (!isAttacking)
             {
-                comboStep++;
+                isAttacking = true;
+                comboStep = 1;
+                anim.SetBool("isAttack", true);
                 anim.SetInteger("attackIndex", comboStep);
+                anim.CrossFade("Attack01_SwordAndShield", 0.05f);
+                comboTimer = Time.time;
+            }
+            else if (isAttacking && comboStep == 1 && state.normalizedTime >= 0.3f)
+            {
+                comboStep = 4;
+                anim.SetInteger("attackIndex", comboStep);
+                anim.CrossFade("Attack04_SwordAndShield", 0.05f);
                 comboTimer = Time.time;
             }
         }
 
-        // Reset setelah waktu habis
-        if (comboStep > 0 && (Time.time - comboTimer) > comboMaxDelay)
+        // Reset combo kalau timeout
+        if (isAttacking && (Time.time - comboTimer) > comboMaxDelay)
         {
-            anim.SetBool("isAttack", false);
-            anim.SetInteger("attackIndex", 0);
-            comboStep = 0;
+            ResetAttack();
         }
 
-        AnimatorStateInfo state = anim.GetCurrentAnimatorStateInfo(0);
-        if (state.IsName("Attack04_SwordAndShield") && state.normalizedTime >= 0.95f)
+        AnimatorStateInfo info = anim.GetCurrentAnimatorStateInfo(0);
+        if ((info.IsName("Attack01_SwordAndShield") || info.IsName("Attack04_SwordAndShield") || info.IsName("Attack_Air_SwordAndShield"))
+            && info.normalizedTime >= 0.95f)
         {
-            anim.SetBool("isAttack", false);
-            anim.SetInteger("attackIndex", 0);
-            comboStep = 0;
+            ResetAttack();
         }
     }
 
-    // -------------------------------------
+    void ResetAttack()
+    {
+        anim.SetBool("isAttack", false);
+        anim.SetInteger("attackIndex", 0);
+        comboStep = 0;
+        isAttacking = false;
+
+        if (!isJumping)
+            anim.CrossFade("Idle_Normal_SwordAndShield", 0.1f);
+    }
+
+    // =============================
     // DEFEND
-    // -------------------------------------
+    // =============================
     void HandleDefend()
     {
         if (Input.GetMouseButtonDown(1))
@@ -140,10 +195,10 @@ public class HeroController : MonoBehaviour
         }
     }
 
-    // -------------------------------------
-    // GET HIT
-    // -------------------------------------
-    void HandleHitInput()
+    // =============================
+    // HIT
+    // =============================
+    void HandleHit()
     {
         if (Input.GetKeyDown(KeyCode.H))
         {
@@ -151,9 +206,9 @@ public class HeroController : MonoBehaviour
         }
     }
 
-    // -------------------------------------
+    // =============================
     // VICTORY
-    // -------------------------------------
+    // =============================
     void HandleVictory()
     {
         if (Input.GetKeyDown(KeyCode.V))
@@ -167,18 +222,19 @@ public class HeroController : MonoBehaviour
         }
     }
 
-    // -------------------------------------
+    // =============================
     // DIE
-    // -------------------------------------
+    // =============================
     public void Die()
     {
         anim.SetBool("isDead", true);
         anim.SetBool("isWalk", false);
-        anim.SetBool("isJump", false);
         anim.SetBool("isDefend", false);
         anim.SetBool("isVictory", false);
         anim.SetBool("isAttack", false);
         anim.SetInteger("attackIndex", 0);
         comboStep = 0;
+        isAttacking = false;
+        anim.CrossFade("Die01_SwordAndShield", 0.1f);
     }
 }
