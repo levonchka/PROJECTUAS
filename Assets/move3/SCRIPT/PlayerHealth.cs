@@ -1,48 +1,67 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 
 public class PlayerHealth : MonoBehaviour
 {
     public int maxHealth = 100;
     public int currentHealth;
-    public Slider healthBar; // drag slider UI dari canvas
+    public Slider healthBar;
+
+    private Animator anim;
+    private bool isDead = false;
 
     void Start()
     {
         currentHealth = maxHealth;
-        if (healthBar) healthBar.maxValue = maxHealth;
+
+        if (healthBar != null)
+        {
+            healthBar.maxValue = maxHealth;
+            healthBar.value = currentHealth;
+        }
+
+        anim = GetComponentInChildren<Animator>();
     }
 
     public void TakeDamage(int damage)
     {
+        if (isDead) return;
+
         currentHealth -= damage;
-        if (healthBar) healthBar.value = currentHealth;
+        if (currentHealth < 0) currentHealth = 0;
 
-        if (currentHealth <= 0)
+        UpdateHealthBar();
+
+        Debug.Log($"Player kena damage: {damage}, sisa darah: {currentHealth}");
+
+        if (currentHealth > 0)
         {
-            Debug.Log("Player mati!");
+            if (anim != null)
+                anim.SetTrigger("isHit");
+        }
+        else
+        {
+            Die();
         }
     }
 
-    // contoh player attack (bisa ganti trigger dari input)
-    void Update()
+    void UpdateHealthBar()
     {
-        if (Input.GetKeyDown(KeyCode.Space))
+        if (healthBar != null)
         {
-            Attack();
+            healthBar.value = currentHealth;
         }
     }
 
-    void Attack()
+    void Die()
     {
-        // cari enemy di sekitar
-        Collider[] hitEnemies = Physics.OverlapSphere(transform.position, 1.5f);
-        foreach (Collider hit in hitEnemies)
-        {
-            if (hit.CompareTag("Enemy"))
-            {
-                hit.GetComponent<EnemyHealth>().TakeDamage(15);
-            }
-        }
+        isDead = true;
+        Debug.Log("Player mati!");
+
+        if (anim != null)
+            anim.SetTrigger("isDead");
+
+        foreach (Collider col in GetComponentsInChildren<Collider>())
+            col.enabled = false;
     }
 }

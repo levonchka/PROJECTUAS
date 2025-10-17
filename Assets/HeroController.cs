@@ -20,17 +20,15 @@ public class HeroController : MonoBehaviour
     [Header("Health Settings")]
     [SerializeField] private float maxHealth = 100f;
     private float currentHealth;
-    public Slider healthBar; // pakai slider di Canvas
+    public Slider healthBar;
+
+    // attack state tracker (used to slow movement while attacking)
+    private bool isAttacking = false;
 
     private Vector3 moveDir = Vector3.zero;
     private float verticalVelocity = 0f;
     private bool isJumping = false;
-    private bool isAttacking = false;
     private bool isDead = false;
-
-    private int comboStep = 0;
-    private float comboTimer = 0f;
-    private readonly float comboMaxDelay = 1.0f;
 
     void Start()
     {
@@ -52,13 +50,8 @@ public class HeroController : MonoBehaviour
 
         HandleMovement();
         HandleJump();
-        HandleAttackCombo();
-        HandleDefend();
     }
 
-    // ========================================
-    // MOVEMENT
-    // ========================================
     void HandleMovement()
     {
         float h = Input.GetAxisRaw("Horizontal");
@@ -71,13 +64,10 @@ public class HeroController : MonoBehaviour
         {
             Vector3 camForward = Camera.main.transform.forward;
             Vector3 camRight = Camera.main.transform.right;
-            camForward.y = 0;
-            camRight.y = 0;
-            camForward.Normalize();
-            camRight.Normalize();
+            camForward.y = 0; camRight.y = 0;
+            camForward.Normalize(); camRight.Normalize();
 
-            Vector3 move = (camForward * v + camRight * h).normalized;
-            moveDir = move;
+            moveDir = (camForward * v + camRight * h).normalized;
 
             Quaternion targetRot = Quaternion.LookRotation(moveDir);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotationSpeed * Time.deltaTime);
@@ -96,9 +86,6 @@ public class HeroController : MonoBehaviour
         controller.Move(velocity * Time.deltaTime);
     }
 
-    // ========================================
-    // JUMP
-    // ========================================
     void HandleJump()
     {
         bool grounded = controller.isGrounded;
@@ -108,8 +95,7 @@ public class HeroController : MonoBehaviour
             if (isJumping)
             {
                 isJumping = false;
-                if (!isAttacking)
-                    anim.CrossFade("Idle_Normal_SwordAndShield", 0.1f);
+                // let animator fall back to idle/walk through transitions
             }
 
             verticalVelocity = -2f;
@@ -120,115 +106,60 @@ public class HeroController : MonoBehaviour
                 isJumping = true;
                 anim.CrossFade("JumpFull_Spin_RM_SwordAndShield", 0.05f);
             }
+            else
+            {
+                anim.SetBool("isJump", false);
+            }
         }
         else
         {
             verticalVelocity -= gravity * Time.deltaTime;
+            anim.SetBool("isJump", true);
         }
     }
 
-    // ========================================
-    // ATTACK COMBO
-    // ========================================
-    void HandleAttackCombo()
-    {
-        if (Input.GetMouseButtonDown(0))
-        {
-            AnimatorStateInfo state = anim.GetCurrentAnimatorStateInfo(0);
-
-            // Attack di udara
-            if (isJumping && !isAttacking)
-            {
-                isAttacking = true;
-                anim.SetBool("isAttack", true);
-                anim.CrossFade("Attack_Air_SwordAndShield", 0.05f);
-                comboTimer = Time.time;
-                return;
-            }
-
-            // Attack di darat
-            if (!isAttacking)
-            {
-                isAttacking = true;
-                comboStep = 1;
-                anim.SetBool("isAttack", true);
-                anim.SetInteger("attackIndex", comboStep);
-                anim.CrossFade("Attack01_SwordAndShield", 0.05f);
-                comboTimer = Time.time;
-            }
-            else if (isAttacking && comboStep == 1 && state.normalizedTime >= 0.3f)
-            {
-                comboStep = 4;
-                anim.SetInteger("attackIndex", comboStep);
-                anim.CrossFade("Attack04_SwordAndShield", 0.05f);
-                comboTimer = Time.time;
-            }
-        }
-
-        // Reset combo
-        if (isAttacking && (Time.time - comboTimer) > comboMaxDelay)
-        {
-            ResetAttack();
-        }
-
-        AnimatorStateInfo info = anim.GetCurrentAnimatorStateInfo(0);
-        if ((info.IsName("Attack01_SwordAndShield") || info.IsName("Attack04_SwordAndShield") || info.IsName("Attack_Air_SwordAndShield"))
-            && info.normalizedTime >= 0.95f)
-        {
-            ResetAttack();
-        }
-    }
-
-    void ResetAttack()
-    {
-        anim.SetBool("isAttack", false);
-        anim.SetInteger("attackIndex", 0);
-        comboStep = 0;
-        isAttacking = false;
-
-        if (!isJumping)
-            anim.CrossFade("Idle_Normal_SwordAndShield", 0.1f);
-    }
-
-    // ========================================
-    // DEFEND
-    // ========================================
-    void HandleDefend()
-    {
-        if (Input.GetMouseButtonDown(1))
-        {
-            anim.SetBool("isDefend", true);
-            anim.SetBool("isWalk", false);
-        }
-        else if (Input.GetMouseButtonUp(1))
-        {
-            anim.SetBool("isDefend", false);
-        }
-    }
-
-    // ========================================
-    // DAMAGE & HIT
-    // ========================================
-    public void TakeDamage(float damage)
+    // PUBLIC: dipanggil PlayerAttack saat attack valid (cooldown ok)
+    // clipName harus sama persis dengan nama clip/state di Animator layer 1
+    public void PlayUpperAttack(string clipName)
     {
         if (isDead) return;
 
+        // play on layer 1 (attack upper)
+        anim.CrossFadeInFixedTime(clipName, 0.06f, 1);
+
+        // set flag agar movement sedikit dikurangi saat attack
+        StopAllCoroutines();
+        float len = GetAnimationClipLength(clipName);
+        if (len <= 0f) len = 0.6f; // fallback
+        isAttacking = true;
+        StartCoroutine(ResetIsAttackingAfter(len * 0.9f));
+    }
+
+    IEnumerator ResetIsAttackingAfter(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        isAttacking = false;
+    }
+
+    float GetAnimationClipLength(string clipName)
+    {
+        if (anim.runtimeAnimatorController == null) return 0f;
+        var clips = anim.runtimeAnimatorController.animationClips;
+        for (int i = 0; i < clips.Length; i++)
+            if (clips[i].name == clipName)
+                return clips[i].length;
+        return 0f;
+    }
+
+    // health methods remain same
+    public void TakeDamage(float damage)
+    {
+        if (isDead) return;
         currentHealth -= damage;
         currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
         if (healthBar) healthBar.value = currentHealth;
-
         anim.SetTrigger("isHit");
-        Debug.Log($"🔥 Hero kena hit! Sisa HP: {currentHealth}");
-
-        if (currentHealth <= 0)
-        {
-            Die();
-        }
-    }
-
-    public float GetCurrentHealth()
-    {
-        return currentHealth;
+        if (currentHealth <= 0) Die();
     }
 
     void Die()
@@ -236,6 +167,5 @@ public class HeroController : MonoBehaviour
         isDead = true;
         anim.SetBool("isDead", true);
         anim.CrossFade("Die01_SwordAndShield", 0.1f);
-        Debug.Log("☠️ Hero mati.");
     }
 }

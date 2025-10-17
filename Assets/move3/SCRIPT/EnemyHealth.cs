@@ -18,19 +18,40 @@ public class EnemyHealth : MonoBehaviour
         if (isDead) return;
 
         currentHealth -= damage;
-        Debug.Log($"{name} menerima damage {damage}, sisa HP: {currentHealth}");
+        Debug.Log($"{name} menerima {damage} damage. Sisa HP: {currentHealth}");
 
         if (currentHealth <= 0)
         {
-            currentHealth = 0;
-            isDead = true;
-            anim.SetBool("isDead", true);
-            anim.CrossFade("Die", 0.1f);
-            Debug.Log($"{name} mati ☠️");
+            Die();
         }
         else
         {
-            anim.SetTrigger("isHit");
+            PlayHitEffect();
         }
+    }
+
+    void PlayHitEffect()
+    {
+        anim.ResetTrigger("isHit");
+        anim.SetTrigger("isHit");
+    }
+
+    void Die()
+    {
+        if (isDead) return;
+        isDead = true;
+
+        currentHealth = 0;
+        anim.SetBool("isDead", true);
+        anim.ResetTrigger("isHit");
+        anim.CrossFade("Die", 0.1f);
+
+        // Matikan collider & AI
+        Collider col = GetComponent<Collider>();
+        if (col != null) col.enabled = false;
+
+        // Hancurkan setelah 3 detik
+        Destroy(gameObject, 3f);
+        Debug.Log($"{name} telah mati ☠️");
     }
 }
