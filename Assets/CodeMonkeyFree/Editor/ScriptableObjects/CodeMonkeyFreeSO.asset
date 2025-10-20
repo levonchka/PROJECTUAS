@@ -14,11 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   currentVersion: 1.01
   subtype: kitchenchaos
-  lastShownTimestamp: 1760716925
+  lastShownTimestamp: 1760806027
   lastUpdateResponse:
     version: 1.01
     versionUrl: https://unitycodemonkey.com
-  checkedLastUpdateTimestamp: 1760716925
+  checkedLastUpdateTimestamp: 1760806027
   lastQOTDResponse:
     questionId: 232
     questionText: What is JSON and what is it useful for?
@@ -27,7 +27,7 @@ MonoBehaviour:
     answerC: Jumping-Signal Over Nonce, crypto concept
     answerD: 
     answerE: 
-  lastQotdTimestamp: 1760716925
+  lastQotdTimestamp: 1760806027
   lastDynamicHeaderResponse:
     topImageUrl: https://codemonkeyexternal.blob.core.windows.net/external/Misc/chrisZJun24_LastCall.png
     topText: Learn how to get more WISHLISTS and Sell more COPIES of your Games!
@@ -35,11 +35,11 @@ MonoBehaviour:
     bottomText: DONT MISS the latest important trends, sign up for my FREE Weekly
       Newsletter!
     bottomLink: gamedevreport
-  lastDynamicHeaderTimestamp: 1760716925
+  lastDynamicHeaderTimestamp: 1760806027
   websiteLatestMessage:
     text: <a href="https://cmonkey.co/freecourses">Check out all my FREE courses!
       Click here!</a>
-  websiteLatestMessageTimestamp: 1760716925
+  websiteLatestMessageTimestamp: 1760806027
   websiteLatestVideos:
     videos:
     - youTubeId: bTQZU_CV9UY
@@ -50,4 +50,4 @@ MonoBehaviour:
       title: 8 QUICK Unity Tips to make BETTER Games!
     - youTubeId: RBgFEaRn_jg
       title: Is YouTube EASY MONEY compared to Game Dev?
-  websiteLatestVideosTimestamp: 1760716925
+  websiteLatestVideosTimestamp: 1760806027

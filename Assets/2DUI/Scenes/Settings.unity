@@ -1948,7 +1948,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 2085626324}
         m_TargetAssemblyTypeName: UIButtonHandler, Assembly-CSharp
-        m_MethodName: LoadMainMenu
+        m_MethodName: GoBack
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -2914,6 +2914,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIButtonHandler
   notificationManager: {fileID: 512876305}
+  escTargetScene: InGameMenu
 --- !u!114 &2085626325
 MonoBehaviour:
   m_ObjectHideFlags: 0
